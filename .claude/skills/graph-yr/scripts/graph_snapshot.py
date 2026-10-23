@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Write a readable, deterministic snapshot of a Python repo's structure. Standard library only.
+
+  python graph_snapshot.py --repo <repo-root> [--out openspec/graph.md] [--max-lines 300]
+
+What it reads: the files git tracks (or would track), `*.py` only. It parses them with
+`ast`. It never imports or runs the code.
+What it writes: module summaries, public classes and functions, and the internal import
+graph as a mermaid diagram. No timestamps and no commit hashes, so an unchanged repo
+gives a byte-identical file.
+
+Text between `<!-- codegraph:begin -->` and `<!-- codegraph:end -->` in the output file
+is kept as it is. graph-yr puts the codegraph notes there.
+Exit code 0 = written, 3 = nothing changed, 1 = error.
+"""
+import argparse
+import ast
+import re
+import subprocess
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path, PurePosixPath
+
+BEGIN, END = "<!-- codegraph:begin -->", "<!-- codegraph:end -->"
+SKIP_DIRS = {"openspec", ".venv", "venv", "node_modules", "build", "dist", "__pycache__"}
+
+
+def git_files(repo):
+    out = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
+        capture_output=True, text=True, encoding="utf-8")
+    if out.returncode != 0:
+        raise SystemExit(f"git ls-files failed: {out.stderr.strip()}")
+    return sorted({l.strip().replace("\\", "/") for l in out.stdout.splitlines() if l.strip()})
+
+
+def is_test(rel):
+    p = PurePosixPath(rel)
+    return "tests" in p.parts or "test" in p.parts or p.name.startswith("test_") or p.name.endswith("_test.py")
+
+
+def dotted(rel):
+    parts = list(PurePosixPath(rel).with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts.pop()
+    return parts
+
+
+def build_index(py_files):
+    """suffix dotted name -> file, only when unique."""
+    cand = defaultdict(set)
+    for rel in py_files:
+        parts = dotted(rel)
+        for i in range(len(parts)):
+            cand[".".join(parts[i:])].add(rel)
+    return {k: next(iter(v)) for k, v in cand.items() if len(v) == 1 and k}
+
+
+def resolve(rel, node, index):
+    """Yield repo files imported by an import node."""
+    names = []
+    if isinstance(node, ast.Import):
+        names = [a.name for a in node.names]
+    elif isinstance(node, ast.ImportFrom):
+        if node.level:
+            base = dotted(rel)
+            if not rel.endswith("__init__.py"):
+                base = base[:-1]
+            base = base[: len(base) - (node.level - 1)] if node.level > 1 else base
+            mod = ".".join(base + (node.module.split(".") if node.module else []))
+        else:
+            mod = node.module or ""
+        names = [mod] + [f"{mod}.{a.name}" if mod else a.name for a in node.names]
+    for n in names:
+        if n in index and index[n] != rel:
+            yield index[n]
+
+
+def summarize(path):
+    src = path.read_text(encoding="utf-8", errors="replace")
+    tree = ast.parse(src)
+    doc = ast.get_docstring(tree) or ""
+    doc = doc.strip().split("\n")[0][:100] if doc else ""
+    classes, funcs = [], []
+    for n in tree.body:
+        if isinstance(n, ast.ClassDef) and not n.name.startswith("_"):
+            methods = [m.name for m in n.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and not m.name.startswith("_")]
+            classes.append((n.name, methods))
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and not n.name.startswith("_"):
+            funcs.append(("async " if isinstance(n, ast.AsyncFunctionDef) else "") + n.name)
+    return tree, doc, classes, funcs
+
+
+def node_id(label):
+    return "n_" + re.sub(r"[^A-Za-z0-9]", "_", label)
+
+
+def group_of(rel, depth):
+    parts = PurePosixPath(rel).parts[:-1]
+    return "/".join(parts[:depth]) if parts else "(root)"
+
+
+def build(repo, max_lines):
+    files = git_files(repo)
+    py = [f for f in files if f.endswith(".py") and not (set(PurePosixPath(f).parts) & SKIP_DIRS)]
+    src_py = [f for f in py if not is_test(f)]
+    tests = [f for f in py if is_test(f)]
+    index = build_index(py)
+    errors, info, edges = [], {}, defaultdict(set)
+    for rel in py:
+        try:
+            tree, doc, classes, funcs = summarize(Path(repo) / rel)
+        except (SyntaxError, ValueError) as e:
+            errors.append(f"{rel}: {type(e).__name__}")
+            continue
+        info[rel] = (doc, classes, funcs)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                for tgt in resolve(rel, node, index):
+                    if tgt != rel:
+                        edges[rel].add(tgt)
+    other = Counter(PurePosixPath(f).suffix or "(none)" for f in files if not f.endswith(".py") and not f.startswith("openspec/"))
+    fan_in = Counter(t for s in edges for t in edges[s] if s in info and t in info)
+
+    out = [
+        "# Code graph",
+        "",
+        "Generated by graph-yr. Do not edit by hand. Regenerate with `graph_snapshot.py`.",
+        "This file is a reading aid for people and for Claude. The live graph is in `.codegraph/` (not committed).",
+        "",
+        f"Python files: {len(src_py)} source, {len(tests)} test. "
+        + ("Other files: " + ", ".join(f"{n} {e}" for e, n in sorted(other.items())) + "." if other else "No other tracked files."),
+    ]
+    if errors:
+        out += ["", "Could not parse: " + ", ".join(sorted(errors))]
+    out += ["", "## Modules", "", "| File | Summary | Public symbols | Imports | Imported by |", "|---|---|---|---|---|"]
+    rows = []
+    for rel in sorted(f for f in src_py if f in info):
+        doc, classes, funcs = info[rel]
+        syms = [c + (f"({', '.join(m[:4])}{', ...' if len(m) > 4 else ''})" if m else "") for c, m in classes] + funcs
+        shown = ", ".join(syms[:8]) + (f", +{len(syms) - 8} more" if len(syms) > 8 else "")
+        n_out = len([t for t in edges.get(rel, ()) if t in info])
+        rows.append(f"| `{rel}` | {doc.replace('|', '/')} | {shown.replace('|', '/')} | {n_out} | {fan_in.get(rel, 0)} |")
+    out += rows
+    if tests:
+        out += ["", "## Tests", ""] + [f"- `{d}`: {n} file(s)" for d, n in sorted(Counter(group_of(t, 3) for t in tests).items())]
+
+    for depth in (3, 2, 1):
+        g = defaultdict(int)
+        for s in edges:
+            if s in info and not is_test(s):
+                for t in edges[s]:
+                    if t in info and not is_test(t):
+                        a, b = group_of(s, depth), group_of(t, depth)
+                        if a != b:
+                            g[(a, b)] += 1
+        nodes = {x for k in g for x in k}
+        if len(nodes) <= 40:
+            break
+    out += ["", "## Dependencies", "", f"Arrows point from the importer to the imported package. Grouped by the first {depth} folder level(s); numbers count import edges between files.", ""]
+    if g:
+        out += ["```mermaid", "flowchart LR"]
+        for n in sorted(nodes):
+            out.append(f'  {node_id(n)}["{n}"]')
+        for (a, b), n in sorted(g.items()):
+            out.append(f"  {node_id(a)} -->|{n}| {node_id(b)}")
+        out.append("```")
+    else:
+        out.append("No imports between folders.")
+    hubs = [f"- `{f}`: imported by {n}" for f, n in sorted(fan_in.items(), key=lambda x: (-x[1], x[0])) if not is_test(f)][:10]
+    if hubs:
+        out += ["", "## Most imported files", ""] + hubs
+    out += ["", "## Notes from codegraph", "", BEGIN, "(none)", END, ""]
+    return out
+
+
+def main(argv):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo", required=True)
+    ap.add_argument("--out", default="openspec/graph.md")
+    ap.add_argument("--max-lines", type=int, default=300)
+    a = ap.parse_args(argv)
+    repo = Path(a.repo)
+    out_path = Path(a.out) if Path(a.out).is_absolute() else repo / a.out
+    lines = build(repo, a.max_lines)
+    old = out_path.read_text(encoding="utf-8").replace("\r\n", "\n") if out_path.exists() else ""
+    m = re.search(re.escape(BEGIN) + r"\n(.*?)\n" + re.escape(END), old, re.S)
+    if m:
+        text = "\n".join(lines)
+        text = text.replace(f"{BEGIN}\n(none)\n{END}", f"{BEGIN}\n{m.group(1)}\n{END}")
+    else:
+        text = "\n".join(lines)
+    body = text.split("\n")
+    if len(body) > a.max_lines:
+        # keep the head and the notes block; drop module rows from the middle
+        cut = len(body) - a.max_lines + 2
+        start = next(i for i, l in enumerate(body) if l.startswith("| `")) + 1
+        body = body[:start] + [f"| ... | {cut} more module row(s) left out to keep this file short. Use codegraph for the rest. | | | |"] + body[start + cut:]
+        text = "\n".join(body)
+    if text == old:
+        print("unchanged")
+        return 3
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {out_path} ({len(text.splitlines())} lines)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
