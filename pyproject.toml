@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hakka-mcp"
+version = "0.1.0"
+description = "MCP server that routes token-saving skill sets by client and task type, and counts the estimated savings."
+requires-python = ">=3.12"
+dependencies = ["mcp==2.3.0", "PyYAML==6.0.3", "SQLAlchemy==2.1.6"]
+
+[project.scripts]
+hakka-mcp = "hakka_mcp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
