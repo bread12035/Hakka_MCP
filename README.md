@@ -18,6 +18,7 @@ Docker:
 
 ```text
 docker build -t hakka-mcp .
+# behind a TLS-inspecting proxy, add: --secret id=pip_cert,src=<ca-bundle.pem>
 docker run -p 8000:8000 -v hakka-data:/data -e HAKKA_PUBLIC_URL=https://hakka.example.com hakka-mcp \
   hakka-mcp serve --host 0.0.0.0 --allow-drafts
 ```

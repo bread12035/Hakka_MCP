@@ -24,3 +24,4 @@ codegraph: none
 - 2026-10-24 skeleton: src/hakka_mcp (catalog, ledger, server, cli) stubs; 32 scenario tests skip; compileall ok
 - 2026-10-24 land-design: dev pushed; branch feat/initial-hakka-mcp created
 - 2026-10-24 implement: options tdd=no, subagents=no
+- 2026-10-24 implement: 32/32 scenario tests pass; docker image verified with MCP client and Claude Code (Connected)

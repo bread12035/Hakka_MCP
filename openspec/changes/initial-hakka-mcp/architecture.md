@@ -145,7 +145,9 @@ Not run. Single-agent sketch.
 
 ## Implementation reconciliation
 
-None yet.
+- `status_template` is a JSON object, not a string, on `Config`, the `route` argument and `RouteResult`. The SDK parses a JSON-looking string argument into an object before validation, so a string type rejected real calls. The catalog now also rejects a template that is not a JSON object. The shared contract holds: the caller still sends a template and gets one back. Accepted by the implementer; flagged for review.
+- `build_app` serves stateless streamable HTTP with JSON responses and an allow-list of hosts (the public URL's host plus localhost). The SDK enables DNS-rebinding protection only for localhost and would otherwise reject or accept every host. Local detail, contract unchanged.
+- The Dockerfile takes an optional `pip_cert` build secret for a TLS-inspecting proxy. Found while verifying the image behind this environment's proxy. Contract unchanged.
 
 ## Open questions and risks
 
