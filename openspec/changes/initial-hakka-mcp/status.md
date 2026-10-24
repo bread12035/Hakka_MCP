@@ -1,7 +1,7 @@
 # Status: initial-hakka-mcp
 
 flow: ground-up
-next: implement
+next: review
 repo: /home/user/Hakka_MCP
 branch: feat/initial-hakka-mcp
 base: dev
@@ -25,3 +25,4 @@ codegraph: none
 - 2026-10-24 land-design: dev pushed; branch feat/initial-hakka-mcp created
 - 2026-10-24 implement: options tdd=no, subagents=no
 - 2026-10-24 implement: 32/32 scenario tests pass; docker image verified with MCP client and Claude Code (Connected)
+- 2026-10-24 implement done: deslop + no-comments (5 comments removed, 1 kept: SDK annotation constraint)
