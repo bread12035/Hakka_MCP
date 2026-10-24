@@ -1,9 +1,9 @@
 # Status: initial-hakka-mcp
 
 flow: ground-up
-next: land
+next: done
 repo: /home/user/Hakka_MCP
-branch: feat/initial-hakka-mcp
+branch: dev
 base: dev
 default-branch: main
 python: .venv/bin/python
@@ -29,3 +29,4 @@ codegraph: none
 - 2026-10-24 review: code-review 24 findings (17 fixed), security fallback checklist 4 (2 fixed); report openspec/reviews/initial-hakka-mcp.md
 - 2026-10-24 graph: codegraph not installed, sync skipped; snapshot openspec/graph.md written
 - 2026-10-24 archive: 4 specs created in openspec/specs, folder moved to archive
+- 2026-10-24 land: merged into dev (ae24eb1) and pushed
