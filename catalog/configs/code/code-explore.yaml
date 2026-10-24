@@ -1,0 +1,6 @@
+version: 1
+skills: [code-graph, pass-by-reference, caveman]
+expected_saving:
+  percent: 20
+  tokens: {input: 40000, output: 2000}
+  provenance: estimate

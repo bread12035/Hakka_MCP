@@ -145,7 +145,13 @@ Not run. Single-agent sketch.
 
 ## Implementation reconciliation
 
-None yet.
+- `status_template` is a JSON object, not a string, on `Config`, the `route` argument and `RouteResult`. The SDK parses a JSON-looking string argument into an object before validation, so a string type rejected real calls. The catalog now also rejects a template that is not a JSON object. The shared contract holds: the caller still sends a template and gets one back. Accepted by the implementer; flagged for review.
+- `build_app` serves stateless streamable HTTP with JSON responses and an allow-list of hosts (the public URL's host plus localhost). The SDK enables DNS-rebinding protection only for localhost and would otherwise reject or accept every host. Local detail, contract unchanged.
+- `Config.status_template(override)` owns the rule that a caller's template replaces the default, and returns a fresh copy. The template is stored as JSON text so the frozen `Config` holds no mutable state. Moved out of `server.py` after review (S3, S4).
+- A config with skill-state and no template file fails to load. The spec only says the template is returned; failing early was kept as a decision after review (P7).
+- `keys issue` replaces a user's previous key, so each user has one key. Kept after review and stated in the CLI help (P8).
+- Per-group statistics deduplicate within each group, so group rows can add up to more than the total when fallback events share a config across task types. The total is still deduplicated once. Kept after review (P9).
+- The Dockerfile takes an optional `pip_cert` build secret for a TLS-inspecting proxy. Found while verifying the image behind this environment's proxy. Contract unchanged.
 
 ## Open questions and risks
 

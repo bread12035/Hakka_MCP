@@ -1,0 +1,6 @@
+version: 1
+skills: [pass-by-reference, caveman]
+expected_saving:
+  percent: 5
+  tokens: {input: 5000, output: 1000}
+  provenance: estimate

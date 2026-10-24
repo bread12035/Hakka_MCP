@@ -1,0 +1,6 @@
+version: 1
+skills: [code-graph, ponytail-rules-only, caveman]
+expected_saving:
+  percent: 12
+  tokens: {input: 20000, output: 2000}
+  provenance: estimate
