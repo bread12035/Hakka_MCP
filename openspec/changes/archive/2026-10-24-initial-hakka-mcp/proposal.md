@@ -38,3 +38,10 @@ Skills and configs live as files in the repo and load at startup; invalid config
 - Whether Cowork lets a session choose the model, which limits model-routing there. (owner: user)
 - Initial expected-saving numbers per config until the Hakka vibe runs produce data. (owner: user)
 - Draft skill texts for the Hakka vibe techniques need the maintainer's review before they are marked approved. (owner: user)
+
+## Outcome
+- Finished: 2026-10-24
+- Branch: feat/initial-hakka-mcp
+- Review report: openspec/reviews/initial-hakka-mcp.md
+- Differences from the plan: `status.json` templates travel as JSON objects, not strings. A config with skill-state and no template file fails to load. `keys issue` replaces a user's earlier key. The Hakka vibe technique skills and the trimmed caveman ship as drafts, so the server needs `--allow-drafts` until the maintainer approves them.
+- Scenarios without a test: none

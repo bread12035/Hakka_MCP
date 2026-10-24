@@ -1,7 +1,7 @@
 # Status: initial-hakka-mcp
 
 flow: ground-up
-next: graph
+next: land
 repo: /home/user/Hakka_MCP
 branch: feat/initial-hakka-mcp
 base: dev
@@ -27,3 +27,5 @@ codegraph: none
 - 2026-10-24 implement: 32/32 scenario tests pass; docker image verified with MCP client and Claude Code (Connected)
 - 2026-10-24 implement done: deslop + no-comments (5 comments removed, 1 kept: SDK annotation constraint)
 - 2026-10-24 review: code-review 24 findings (17 fixed), security fallback checklist 4 (2 fixed); report openspec/reviews/initial-hakka-mcp.md
+- 2026-10-24 graph: codegraph not installed, sync skipped; snapshot openspec/graph.md written
+- 2026-10-24 archive: 4 specs created in openspec/specs, folder moved to archive
