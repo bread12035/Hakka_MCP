@@ -1,0 +1,6 @@
+version: 1
+skills: [pass-by-reference, skill-state, model-routing, caveman]
+expected_saving:
+  percent: 25
+  tokens: {input: 50000, output: 3000}
+  provenance: estimate

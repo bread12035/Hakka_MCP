@@ -1,0 +1,7 @@
+# Placeholder numbers until the Hakka vibe runs produce data.
+version: 1
+skills: [ponytail-rules-only, code-graph, skill-state, model-routing, caveman]
+expected_saving:
+  percent: 15
+  tokens: {input: 30000, output: 3000}
+  provenance: estimate

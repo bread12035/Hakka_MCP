@@ -1,10 +1,11 @@
 """Scenarios of the usage delta spec. One test per scenario."""
 
+import csv
+import io
 from datetime import UTC, datetime
 
-import pytest
-
 from hakka_mcp.catalog import Catalog, Client, Provenance
+from hakka_mcp.cli import main
 from hakka_mcp.ledger import GroupBy, UsageEvent
 
 
@@ -105,9 +106,21 @@ def test_savings_split_by_provenance(catalog_files, ledger):
     assert saved[Provenance.VENDOR_CLAIM] == 7
 
 
-def test_cli_report_as_csv():
+def test_cli_report_as_csv(catalog_files, ledger, capsys, tmp_path):
     """CLI report as CSV."""
-    pytest.skip("lands with the CLI unit")
+    catalog_files.config("code", "code-feature", ["caveman"], input_tokens=100, output_tokens=0)
+    catalog_files.config("code", "code-bugfix", ["caveman"], input_tokens=10, output_tokens=0)
+    catalog = load(catalog_files)
+    ledger.record(event(catalog.resolve(Client.CODE, "code-feature")))
+    ledger.record(event(catalog.resolve(Client.CODE, "code-bugfix")))
+    db = f"sqlite:///{tmp_path / 'hakka.db'}"
+    assert main(["report", "--db", db, "--group-by", "task_type", "--csv"]) == 0
+    rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
+    assert [(r["group"], r["calls"], r["tokens_estimate"]) for r in rows] == [
+        ("code-bugfix", "1", "10"),
+        ("code-feature", "1", "100"),
+        ("total", "2", "110"),
+    ]
 
 
 def test_empty_usage_store(ledger):

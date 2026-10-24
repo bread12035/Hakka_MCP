@@ -1,8 +1,10 @@
 """Scenarios of the access delta spec. One test per scenario."""
 
-import httpx2
-import pytest
+import sqlite3
 
+import httpx2
+
+from hakka_mcp.cli import main
 from hakka_mcp.ledger import GroupBy
 
 ROUTE = {"client": "code", "task_type": "code-feature", "session_id": "s1", "rationale": "why"}
@@ -48,11 +50,24 @@ def test_non_admin_asks_for_statistics(mcp_session):
     assert "forbidden" in result.content[0].text
 
 
-def test_issue_a_key():
+def test_issue_a_key(mcp_session, ledger, capsys, tmp_path):
     """Issue a key."""
-    pytest.skip("lands with the CLI unit")
+    assert main(["keys", "issue", "bob", "--db", f"sqlite:///{tmp_path / 'hakka.db'}"]) == 0
+    key = capsys.readouterr().out.strip()
+    result = mcp_session(None, key=key).call("route", **ROUTE)
+    assert not result.is_error
+    total = ledger.stats(GroupBy.TOTAL).total
+    assert total.users == 1
+    assert [k.user_id for k in ledger.list_keys()] == ["bob"]
 
 
-def test_stored_key_is_not_readable():
+def test_stored_key_is_not_readable(ledger, capsys, tmp_path):
     """Stored key is not readable."""
-    pytest.skip("lands with the CLI unit")
+    key = ledger.issue_key("alice", admin=True)
+    assert main(["keys", "list", "--db", f"sqlite:///{tmp_path / 'hakka.db'}"]) == 0
+    listing = capsys.readouterr().out
+    assert listing.startswith("alice\tadmin\tactive\t")
+    assert key not in listing
+    with sqlite3.connect(tmp_path / "hakka.db") as conn:
+        stored = [v for row in conn.execute("SELECT * FROM api_keys") for v in row]
+    assert key not in stored

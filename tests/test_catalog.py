@@ -89,7 +89,6 @@ def test_saving_number_without_provenance(catalog_files):
 
 def test_shipped_catalog_loads():
     """Shipped catalog loads."""
-    pytest.skip("shipped catalog lands with the CLI unit")
     catalog = Catalog.load(SHIPPED, allow_drafts=True)
     assert set(catalog.task_types()) == {
         "cowork-poc", "cowork-daily-data", "cowork-doc",
