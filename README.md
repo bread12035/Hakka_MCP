@@ -44,7 +44,7 @@ claude mcp add --transport http hakka https://hakka.example.com/mcp --header "Au
 
 ```text
 hakka-mcp report --group-by task_type
-hakka-mcp report --group-by config --current-estimates --csv > savings.csv
+hakka-mcp report --group-by config --current-estimates --allow-drafts --csv > savings.csv
 ```
 
 Each event keeps the estimate that was current when it was recorded. `--current-estimates` re-prices the old events with the catalog's current numbers and changes nothing in the database.

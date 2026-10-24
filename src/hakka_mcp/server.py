@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlsplit
 
+import anyio.to_thread
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
@@ -69,7 +70,7 @@ class _KeyVerifier:
         self._ledger = ledger
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        principal = self._ledger.authenticate(token)
+        principal = await anyio.to_thread.run_sync(self._ledger.authenticate, token)
         if principal is None:
             return None
         scopes = [ADMIN_SCOPE] if principal.admin else []
@@ -132,15 +133,12 @@ def build_app(catalog: Catalog, ledger: Ledger, *, public_url: str) -> Starlette
             )
         )
         config = resolution.config
-        template = None
-        if config.status_template is not None:
-            template = dict(status_template if status_template is not None else config.status_template)
         return RouteResult(
             config_id=config.id,
             config_version=config.version,
             fallback=resolution.fallback,
             skills=[SkillText(id=s.id, technique=s.technique.value, draft=s.draft, text=s.text) for s in config.skills],
-            status_template=template,
+            status_template=config.status_template(status_template),
         )
 
     @server.tool()

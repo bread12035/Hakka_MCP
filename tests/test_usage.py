@@ -74,12 +74,28 @@ def test_recompute_with_current_estimates(catalog_files, ledger):
     assert ledger.stats(GroupBy.TOTAL, current).total.saved_tokens[Provenance.ESTIMATE] == 500
 
 
-def test_long_rationale_truncated(mcp_session, stored_rationales):
+def test_long_rationale_truncated(mcp_session, stored_events):
     """Long rationale truncated."""
     mcp_session("alice").call(
         "route", client="code", task_type="code-feature", session_id="s1", rationale="r" * 500
     )
-    assert stored_rationales() == ["r" * 200]
+    assert [e["rationale"] for e in stored_events()] == ["r" * 200]
+
+
+def test_long_session_id_truncated(mcp_session, stored_events):
+    mcp_session("alice").call(
+        "route", client="code", task_type="code-feature", session_id="s" * 500, rationale="why"
+    )
+    assert [e["session_id"] for e in stored_events()] == ["s" * 200]
+
+
+def test_admin_reads_statistics(mcp_session):
+    mcp_session("alice").call("route", client="code", task_type="code-feature", session_id="s1", rationale="why")
+    result = mcp_session("boss", admin=True).call("get_usage_stats", group_by="client")
+    assert not result.is_error
+    body = result.structured_content
+    assert [(r["group"], r["users"], r["calls"]) for r in body["rows"]] == [("code", 1, 1)]
+    assert body["total"]["saved_tokens"]["estimate"] == 1200
 
 
 def test_statistics_grouped_by_task_type(catalog_files, ledger):

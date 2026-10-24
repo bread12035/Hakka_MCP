@@ -39,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     serve.set_defaults(run=_serve)
 
     keys = commands.add_parser("keys", help="manage API keys").add_subparsers(required=True)
-    issue = keys.add_parser("issue", help="issue a key; it is printed once")
+    issue = keys.add_parser("issue", help="issue a key; it is printed once and replaces the user's old key")
     issue.add_argument("user_id")
     issue.add_argument("--admin", action="store_true")
     _db_option(issue)
@@ -56,7 +56,7 @@ def _parser() -> argparse.ArgumentParser:
     _db_option(report)
     report.add_argument("--group-by", type=GroupBy, choices=list(GroupBy), default=GroupBy.TOTAL)
     report.add_argument("--current-estimates", action="store_true", help="re-price with the catalog's estimates")
-    report.add_argument("--catalog", type=Path, default=Path(DEFAULT_CATALOG))
+    _catalog_options(report)
     report.add_argument("--csv", action="store_true")
     report.set_defaults(run=_report)
     return parser
@@ -115,14 +115,16 @@ def _list(args: argparse.Namespace) -> int:
 
 
 def _revoke(args: argparse.Namespace) -> int:
-    Ledger(args.db).revoke_key(args.user_id)
+    if not Ledger(args.db).revoke_key(args.user_id):
+        print(f"no key for {args.user_id}", file=sys.stderr)
+        return 1
     return 0
 
 
 def _report(args: argparse.Namespace) -> int:
     current = None
     if args.current_estimates:
-        catalog = _load(args.catalog, allow_drafts=True)
+        catalog = _load(args.catalog, allow_drafts=args.allow_drafts)
         if catalog is None:
             return 1
         current = catalog.estimates()

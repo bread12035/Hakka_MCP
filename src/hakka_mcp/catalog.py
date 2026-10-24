@@ -81,7 +81,19 @@ class Config:
     version: int
     skills: tuple[Skill, ...]
     estimate: Estimate
-    status_template: Mapping[str, Any] | None
+    _status_template_json: str | None
+
+    def status_template(self, override: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+        """The status.json template for skill-state, or None when the config has no skill-state.
+
+        A caller's template replaces the default. The result is a fresh copy each time.
+        """
+        if self._status_template_json is None:
+            return None
+        if override is not None:
+            return json.loads(json.dumps(override))
+        template: dict[str, Any] = json.loads(self._status_template_json)
+        return template
 
 
 @dataclass(frozen=True)
@@ -181,8 +193,11 @@ def _load_skills(folder: Path, problems: list[str]) -> dict[str, Skill]:
     skills: dict[str, Skill] = {}
     for path in sorted(folder.glob("*/SKILL.md")):
         skill_id = path.parent.name
-        text = path.read_text(encoding="utf-8")
-        meta, body = _split_frontmatter(text)
+        try:
+            meta, body = _split_frontmatter(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            problems.append(f"skill {skill_id}: cannot read ({exc})")
+            continue
         body = body.strip()
         if meta is None:
             problems.append(f"skill {skill_id}: missing frontmatter")
@@ -243,19 +258,19 @@ def _load_config(
             problems.append(f"{config_id}: technique {skill.technique} is not allowed for {client}")
         chosen.append(skill)
     version = data.get("version")
-    if not isinstance(version, int):
-        problems.append(f"{config_id}: version must be an integer")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        problems.append(f"{config_id}: version must be a positive integer")
     estimate = _parse_estimate(data.get("expected_saving"), config_id, prices, problems)
     template = None
     if any(s.technique is Technique.SKILL_STATE for s in chosen):
         template_path = root / "templates" / "status" / f"{path.stem}.json"
         template = _load_template(template_path, config_id, problems)
-    if len(problems) > before or estimate is None or not isinstance(version, int):
+    if len(problems) > before or estimate is None:
         return None
     return Config(config_id, client, path.stem, version, tuple(chosen), estimate, template)
 
 
-def _load_template(path: Path, config_id: str, problems: list[str]) -> Mapping[str, Any] | None:
+def _load_template(path: Path, config_id: str, problems: list[str]) -> str | None:
     if not path.is_file():
         problems.append(f"{config_id}: skill-state needs {path}")
         return None
@@ -267,7 +282,7 @@ def _load_template(path: Path, config_id: str, problems: list[str]) -> Mapping[s
     if not isinstance(template, dict):
         problems.append(f"{path}: must be a JSON object")
         return None
-    return template
+    return json.dumps(template)
 
 
 def _parse_estimate(raw: object, config_id: str, prices: _Prices, problems: list[str]) -> Estimate | None:
@@ -289,6 +304,9 @@ def _parse_estimate(raw: object, config_id: str, prices: _Prices, problems: list
         output_tokens = int(tokens["output"])
     except (KeyError, TypeError, ValueError):
         problems.append(f"{config_id}: expected_saving needs percent, tokens.input and tokens.output")
+        return None
+    if not 0 <= percent <= 100 or input_tokens < 0 or output_tokens < 0:
+        problems.append(f"{config_id}: expected_saving needs a percent from 0 to 100 and non-negative tokens")
         return None
     usd = (input_tokens * prices.input_usd_per_mtok + output_tokens * prices.output_usd_per_mtok) / 1_000_000
     source = raw.get("source")

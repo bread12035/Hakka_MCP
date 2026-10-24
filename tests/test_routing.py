@@ -27,15 +27,17 @@ def test_unknown_client_rejected(mcp_session, ledger):
     result = route(mcp_session("alice"), client="vscode")
     assert result.is_error
     message = result.content[0].text
-    assert "code" in message and "cowork" in message
+    assert "'code'" in message and "'cowork'" in message
     assert ledger.stats(GroupBy.TOTAL).total.calls == 0
 
 
-def test_unconfigured_task_type_falls_back(mcp_session):
+def test_unconfigured_task_type_falls_back(mcp_session, stored_events):
     """Unconfigured task type falls back."""
     body = route(mcp_session("alice"), client="cowork", task_type="code-feature").structured_content
     assert body["config_id"] == "cowork/default"
     assert body["fallback"] is True
+    [stored] = stored_events()
+    assert (stored["config_id"], stored["task_type"], stored["fallback"]) == ("cowork/default", "code-feature", 1)
 
 
 def test_default_status_template_returned(catalog_files, mcp_session):

@@ -18,6 +18,7 @@ import sqlalchemy as sa
 from hakka_mcp.catalog import Client, Estimate, Provenance, Resolution
 
 MAX_RATIONALE_CHARS: Final = 200
+MAX_ID_CHARS: Final = 200
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,7 @@ _events = sa.Table(
     sa.Column("user_id", sa.String(200), nullable=False, index=True),
     sa.Column("client", sa.String(20), nullable=False),
     sa.Column("task_type", sa.String(100), nullable=False),
-    sa.Column("session_id", sa.String(200), nullable=False),
+    sa.Column("session_id", sa.String(MAX_ID_CHARS), nullable=False),
     sa.Column("config_id", sa.String(200), nullable=False),
     sa.Column("config_version", sa.Integer, nullable=False),
     sa.Column("fallback", sa.Boolean, nullable=False),
@@ -112,7 +113,7 @@ class Ledger:
         _metadata.create_all(self._engine)
 
     def record(self, event: UsageEvent) -> None:
-        """Store the event with its estimate snapshot; truncate the rationale to MAX_RATIONALE_CHARS."""
+        """Store the event with its estimate snapshot; truncate the rationale and the session id."""
         config = event.resolution.config
         estimate = config.estimate
         with self._engine.begin() as conn:
@@ -121,7 +122,7 @@ class Ledger:
                     user_id=event.user_id,
                     client=event.client.value,
                     task_type=event.task_type,
-                    session_id=event.session_id,
+                    session_id=event.session_id[:MAX_ID_CHARS],
                     config_id=config.id,
                     config_version=config.version,
                     fallback=event.resolution.fallback,
@@ -142,15 +143,17 @@ class Ledger:
         """
         with self._engine.connect() as conn:
             rows = conn.execute(sa.select(_events).order_by(_events.c.id)).all()
+        column = _GROUP_COLUMNS.get(group_by)
         total = _Tally()
         groups: dict[str, _Tally] = {}
         for row in rows:
             total.add(row, current)
-            if group_by is not GroupBy.TOTAL:
-                groups.setdefault(_group_of(row, group_by), _Tally()).add(row, current)
-        if group_by is GroupBy.TOTAL:
-            return Stats(rows=(total.row("total"),), total=total.row("total"))
-        return Stats(rows=tuple(t.row(name) for name, t in sorted(groups.items())), total=total.row("total"))
+            if column is not None:
+                groups.setdefault(row._mapping[column], _Tally()).add(row, current)
+        total_row = total.row("total")
+        if column is None:
+            return Stats(rows=(total_row,), total=total_row)
+        return Stats(rows=tuple(t.row(name) for name, t in sorted(groups.items())), total=total_row)
 
     def issue_key(self, user_id: str, *, admin: bool) -> str:
         """Create a key for the user and return it. Only its hash is stored.
@@ -184,28 +187,25 @@ class Ledger:
             rows = conn.execute(sa.select(_keys).order_by(_keys.c.user_id)).all()
         return tuple(KeyInfo(r.user_id, r.admin, r.revoked, r.created_at) for r in rows)
 
-    def revoke_key(self, user_id: str) -> None:
+    def revoke_key(self, user_id: str) -> bool:
+        """Revoke the user's key. Returns False when the user has no key."""
         with self._engine.begin() as conn:
-            conn.execute(_keys.update().where(_keys.c.user_id == user_id).values(revoked=True))
+            result = conn.execute(_keys.update().where(_keys.c.user_id == user_id).values(revoked=True))
+        return result.rowcount > 0
 
 
-def _group_of(row: sa.Row[Any], group_by: GroupBy) -> str:
-    match group_by:
-        case GroupBy.TOTAL:
-            return "total"
-        case GroupBy.CLIENT:
-            return row.client
-        case GroupBy.TASK_TYPE:
-            return row.task_type
-        case GroupBy.CONFIG:
-            return row.config_id
+_GROUP_COLUMNS: Final[Mapping[GroupBy, str]] = {
+    GroupBy.CLIENT: "client",
+    GroupBy.TASK_TYPE: "task_type",
+    GroupBy.CONFIG: "config_id",
+}
 
 
 @dataclass
 class _Tally:
     users: set[str] = field(default_factory=set)
     calls: int = 0
-    counted: set[tuple[str, str, str]] = field(default_factory=set)
+    sessions: set[tuple[str, str, str]] = field(default_factory=set)
     tokens: dict[Provenance, int] = field(default_factory=lambda: dict.fromkeys(Provenance, 0))
     usd: dict[Provenance, float] = field(default_factory=lambda: dict.fromkeys(Provenance, 0.0))
 
@@ -213,9 +213,9 @@ class _Tally:
         self.users.add(row.user_id)
         self.calls += 1
         key = (row.user_id, row.session_id, row.config_id)
-        if key in self.counted:
+        if key in self.sessions:
             return
-        self.counted.add(key)
+        self.sessions.add(key)
         estimate = current.get(row.config_id) if current is not None else None
         if estimate is not None:
             provenance, tokens, usd = estimate.provenance, estimate.input_tokens + estimate.output_tokens, estimate.usd
@@ -226,4 +226,4 @@ class _Tally:
         self.usd[provenance] += usd
 
     def row(self, group: str) -> StatsRow:
-        return StatsRow(group, len(self.users), self.calls, len(self.counted), dict(self.tokens), dict(self.usd))
+        return StatsRow(group, len(self.users), self.calls, len(self.sessions), dict(self.tokens), dict(self.usd))

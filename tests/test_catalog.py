@@ -105,3 +105,20 @@ def test_config_references_a_draft_skill(catalog_files):
     problems = load_problems(catalog_files)
     assert "code/code-feature" in problems
     assert "new-rules" in problems
+
+
+def test_malformed_skill_frontmatter_reported_with_other_problems(catalog_files):
+    (catalog_files.root / "skills" / "broken").mkdir()
+    (catalog_files.root / "skills" / "broken" / "SKILL.md").write_text("---\ntechnique: [\n---\nbody\n")
+    catalog_files.config("code", "code-feature", ["missing-a"])
+    problems = load_problems(catalog_files)
+    assert "skill broken" in problems
+    assert "missing-a" in problems
+
+
+def test_boolean_version_and_negative_tokens_rejected(catalog_files):
+    path = catalog_files.config("code", "code-feature", ["caveman"], input_tokens=-5)
+    path.write_text(path.read_text().replace("version: 1", "version: true"))
+    problems = load_problems(catalog_files)
+    assert "version must be a positive integer" in problems
+    assert "non-negative tokens" in problems

@@ -137,9 +137,12 @@ def mcp_session(catalog_files: CatalogFiles, ledger, serve):
 
 
 @pytest.fixture
-def stored_rationales(tmp_path: Path):
-    def read() -> list[str]:
+def stored_events(tmp_path: Path):
+    """The usage events as rows, for scenarios whose THEN is about what was stored."""
+
+    def read() -> list[dict[str, object]]:
         with sqlite3.connect(tmp_path / "hakka.db") as conn:
-            return [r[0] for r in conn.execute("SELECT rationale FROM usage_events ORDER BY id")]
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute("SELECT * FROM usage_events ORDER BY id")]
 
     return read

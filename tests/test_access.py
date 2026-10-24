@@ -21,7 +21,10 @@ def assert_unauthorized(url: str, key: str | None) -> None:
 
 
 def test_missing_api_key_rejected(mcp_session, ledger):
-    """Missing API key rejected."""
+    """Missing API key rejected.
+
+    Auth sits at the HTTP transport, so the first request of any session is refused before `route` is reachable.
+    """
     assert_unauthorized(mcp_session(None).url, None)
     assert ledger.stats(GroupBy.TOTAL).total.calls == 0
 
@@ -33,14 +36,11 @@ def test_revoked_key_rejected(mcp_session, ledger):
     assert_unauthorized(mcp_session(None).url, key)
 
 
-def test_user_id_comes_from_the_key(mcp_session, ledger):
+def test_user_id_comes_from_the_key(mcp_session, stored_events):
     """User id comes from the key."""
-    mcp_session("alice").call("route", **ROUTE, user_id="mallory")
-    keys = {k.user_id for k in ledger.list_keys()}
-    assert keys == {"alice"}
-    rows = ledger.stats(GroupBy.TOTAL).total
-    assert rows.users == 1
-    assert "mallory" not in repr(ledger.stats(GroupBy.CONFIG))
+    result = mcp_session("alice").call("route", **ROUTE, user_id="mallory")
+    assert not result.is_error
+    assert [e["user_id"] for e in stored_events()] == ["alice"]
 
 
 def test_non_admin_asks_for_statistics(mcp_session):
@@ -50,15 +50,13 @@ def test_non_admin_asks_for_statistics(mcp_session):
     assert "forbidden" in result.content[0].text
 
 
-def test_issue_a_key(mcp_session, ledger, capsys, tmp_path):
+def test_issue_a_key(mcp_session, stored_events, capsys, tmp_path):
     """Issue a key."""
     assert main(["keys", "issue", "bob", "--db", f"sqlite:///{tmp_path / 'hakka.db'}"]) == 0
     key = capsys.readouterr().out.strip()
     result = mcp_session(None, key=key).call("route", **ROUTE)
     assert not result.is_error
-    total = ledger.stats(GroupBy.TOTAL).total
-    assert total.users == 1
-    assert [k.user_id for k in ledger.list_keys()] == ["bob"]
+    assert [e["user_id"] for e in stored_events()] == ["bob"]
 
 
 def test_stored_key_is_not_readable(ledger, capsys, tmp_path):
@@ -71,3 +69,8 @@ def test_stored_key_is_not_readable(ledger, capsys, tmp_path):
     with sqlite3.connect(tmp_path / "hakka.db") as conn:
         stored = [v for row in conn.execute("SELECT * FROM api_keys") for v in row]
     assert key not in stored
+
+
+def test_revoke_unknown_user_fails(ledger, capsys, tmp_path):
+    assert main(["keys", "revoke", "nobody", "--db", f"sqlite:///{tmp_path / 'hakka.db'}"]) == 1
+    assert "nobody" in capsys.readouterr().err
