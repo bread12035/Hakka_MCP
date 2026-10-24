@@ -12,6 +12,8 @@ COPY catalog ./catalog
 
 ENV HAKKA_CATALOG=/app/catalog \
     HAKKA_DB=sqlite:////data/hakka.db
+RUN useradd --system --uid 10001 hakka && mkdir /data && chown hakka /data
+USER hakka
 VOLUME /data
 EXPOSE 8000
 

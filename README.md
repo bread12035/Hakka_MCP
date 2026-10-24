@@ -25,6 +25,8 @@ docker run -p 8000:8000 -v hakka-data:/data -e HAKKA_PUBLIC_URL=https://hakka.ex
 
 TLS ends at the reverse proxy in front of the container. Set `HAKKA_PUBLIC_URL` to the public HTTPS address.
 
+The server has no rate limit of its own. Set a per-key request limit on the reverse proxy, for example 60 requests a minute on `/mcp`.
+
 ## Give a user access
 
 ```text
@@ -33,6 +35,8 @@ hakka-mcp keys issue maintainer --admin
 hakka-mcp keys list
 hakka-mcp keys revoke alice
 ```
+
+A key is shown once. Hand it over through a private channel, not a shared chat or ticket, and clear it from shell history and job logs. Claude Code stores the `--header` value in plain text in its config, so revoke the key when a laptop is lost.
 
 The user adds the server to Claude Code:
 
