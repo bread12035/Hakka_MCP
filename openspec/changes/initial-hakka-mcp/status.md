@@ -1,9 +1,9 @@
 # Status: initial-hakka-mcp
 
 flow: ground-up
-next: land-design
+next: implement
 repo: /home/user/Hakka_MCP
-branch: dev
+branch: feat/initial-hakka-mcp
 base: dev
 default-branch: main
 python: .venv/bin/python
@@ -11,8 +11,8 @@ python-version: 3.13.17
 test: .venv/bin/python -m pytest -q
 lint: none
 typecheck: none (build check: .venv/bin/python -m compileall -q src)
-tdd: ask
-subagents: ask
+tdd: no
+subagents: no
 proposal: openspec/changes/initial-hakka-mcp/proposal.md
 architecture: openspec/changes/initial-hakka-mcp/architecture.md
 codegraph: none
@@ -22,3 +22,5 @@ codegraph: none
 - 2026-10-24 propose: greenfield interview done (3 rounds); 4 domains, 18 requirements, 32 scenarios; approved
 - 2026-10-24 architect: design approved (catalog + ledger, two adapters); packages mcp, PyYAML, SQLAlchemy; tooling pytest only
 - 2026-10-24 skeleton: src/hakka_mcp (catalog, ledger, server, cli) stubs; 32 scenario tests skip; compileall ok
+- 2026-10-24 land-design: dev pushed; branch feat/initial-hakka-mcp created
+- 2026-10-24 implement: options tdd=no, subagents=no
