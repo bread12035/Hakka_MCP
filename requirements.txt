@@ -1,1 +1,4 @@
 # Runtime packages. architect-yr adds them after approval.
+mcp==2.3.0
+PyYAML==6.0.3
+SQLAlchemy==2.1.6

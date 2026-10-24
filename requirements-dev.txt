@@ -1,2 +1,2 @@
 -r requirements.txt
-# Dev packages. architect-yr adds them after approval.
+pytest==9.1.1
