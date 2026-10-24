@@ -56,7 +56,7 @@ Each event keeps the estimate that was current when it was recorded. `--current-
 | `catalog/configs/<client>/<task-type>.yaml` | One config set: skills, version, expected saving with provenance |
 | `catalog/skills/<id>/SKILL.md` | A skill. Frontmatter: `technique`, `status`, `source` |
 | `catalog/templates/status/<task-type>.json` | Default `status.json` for configs with skill-state |
-| `catalog/pricing.yaml` | USD per million tokens for the savings estimate |
+| `catalog/pricing.yaml` | USD per million tokens for the savings estimate. The shipped values are a placeholder list price; set the company rate |
 
 A new task type is one new YAML file. Run `hakka-mcp check` before you deploy; it lists every problem.
 

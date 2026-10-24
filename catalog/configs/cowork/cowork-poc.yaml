@@ -1,4 +1,3 @@
-# First-time users read every reply, so no caveman here.
 version: 1
 skills: [pass-by-reference, model-routing]
 expected_saving:

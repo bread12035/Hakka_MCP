@@ -1,5 +1,3 @@
-# Weighted USD per million tokens used to price estimated savings.
-# Placeholder: a mid-tier model's list price. Replace with the company's blended rate.
 usd_per_mtok:
   input: 3.0
   output: 15.0

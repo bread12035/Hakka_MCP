@@ -8,17 +8,17 @@ and map the result to wire models. The principal always comes from the bearer ke
 # runtime, and the SDK must see the real objects to build the input schema.
 
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlsplit
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import BaseModel
 from mcp.server.transport_security import TransportSecuritySettings
+from pydantic import BaseModel
 from starlette.applications import Starlette
 
 from hakka_mcp.catalog import Catalog, Client
@@ -112,7 +112,7 @@ def build_app(catalog: Catalog, ledger: Ledger, *, public_url: str) -> Starlette
     @server.tool()
     def route(
         client: Client,
-        task_type: TaskType,  # type: ignore[valid-type]
+        task_type: TaskType,
         session_id: str,
         rationale: str,
         status_template: dict[str, Any] | None = None,
