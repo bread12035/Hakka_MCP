@@ -54,3 +54,10 @@ class CatalogFiles:
 @pytest.fixture
 def catalog_files(tmp_path: Path) -> CatalogFiles:
     return CatalogFiles(tmp_path / "catalog")
+
+
+@pytest.fixture
+def ledger(tmp_path: Path):
+    from hakka_mcp.ledger import Ledger
+
+    return Ledger(f"sqlite:///{tmp_path / 'hakka.db'}")
