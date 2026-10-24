@@ -6,6 +6,7 @@ so callers trust the types and never re-check them.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -80,7 +81,7 @@ class Config:
     version: int
     skills: tuple[Skill, ...]
     estimate: Estimate
-    status_template: str | None
+    status_template: Mapping[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -248,13 +249,25 @@ def _load_config(
     template = None
     if any(s.technique is Technique.SKILL_STATE for s in chosen):
         template_path = root / "templates" / "status" / f"{path.stem}.json"
-        if template_path.is_file():
-            template = template_path.read_text(encoding="utf-8")
-        else:
-            problems.append(f"{config_id}: skill-state needs {template_path}")
+        template = _load_template(template_path, config_id, problems)
     if len(problems) > before or estimate is None or not isinstance(version, int):
         return None
     return Config(config_id, client, path.stem, version, tuple(chosen), estimate, template)
+
+
+def _load_template(path: Path, config_id: str, problems: list[str]) -> Mapping[str, Any] | None:
+    if not path.is_file():
+        problems.append(f"{config_id}: skill-state needs {path}")
+        return None
+    try:
+        template = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        problems.append(f"{path}: invalid JSON ({exc})")
+        return None
+    if not isinstance(template, dict):
+        problems.append(f"{path}: must be a JSON object")
+        return None
+    return template
 
 
 def _parse_estimate(raw: object, config_id: str, prices: _Prices, problems: list[str]) -> Estimate | None:

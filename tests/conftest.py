@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import socket
+import sqlite3
+import threading
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
+import httpx2
 import pytest
+import uvicorn
 import yaml
+from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 
 
 class CatalogFiles:
@@ -61,3 +70,76 @@ def ledger(tmp_path: Path):
     from hakka_mcp.ledger import Ledger
 
     return Ledger(f"sqlite:///{tmp_path / 'hakka.db'}")
+
+
+class McpSession:
+    """Calls the running server over streamable HTTP with one API key."""
+
+    def __init__(self, url: str, key: str | None) -> None:
+        self.url = url
+        self.key = key
+
+    def call(self, tool: str, **arguments: object):
+        return asyncio.run(self._call(tool, arguments))
+
+    async def _call(self, tool: str, arguments: dict[str, object]):
+        headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
+        async with httpx2.AsyncClient(headers=headers, timeout=10) as http:
+            async with streamable_http_client(self.url, http_client=http) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await session.call_tool(tool, arguments)
+
+
+@pytest.fixture
+def serve(catalog_files: CatalogFiles, ledger):
+    """Start the server lazily, so a test can shape the catalog first. Returns the MCP URL."""
+    from hakka_mcp.catalog import Catalog
+    from hakka_mcp.server import build_app
+
+    servers: list[uvicorn.Server] = []
+
+    def start(*, allow_drafts: bool = False) -> str:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        catalog = Catalog.load(catalog_files.root, allow_drafts=allow_drafts)
+        app = build_app(catalog, ledger, public_url=f"http://127.0.0.1:{port}")
+        server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+        threading.Thread(target=server.run, daemon=True).start()
+        deadline = time.monotonic() + 10
+        while not server.started:
+            if time.monotonic() > deadline:
+                raise RuntimeError("server did not start")
+            time.sleep(0.02)
+        servers.append(server)
+        return f"http://127.0.0.1:{port}/mcp"
+
+    yield start
+    for server in servers:
+        server.should_exit = True
+
+
+@pytest.fixture
+def mcp_session(catalog_files: CatalogFiles, ledger, serve):
+    """`mcp_session(user, admin=False)` issues a key and returns a session on the running server."""
+    catalog_files.config("code", "code-feature", ["caveman"])
+    urls: list[str] = []
+
+    def open_session(user_id: str | None, *, admin: bool = False, key: str | None = None) -> McpSession:
+        if not urls:
+            urls.append(serve())
+        if user_id is not None and key is None:
+            key = ledger.issue_key(user_id, admin=admin)
+        return McpSession(urls[0], key)
+
+    return open_session
+
+
+@pytest.fixture
+def stored_rationales(tmp_path: Path):
+    def read() -> list[str]:
+        with sqlite3.connect(tmp_path / "hakka.db") as conn:
+            return [r[0] for r in conn.execute("SELECT rationale FROM usage_events ORDER BY id")]
+
+    return read

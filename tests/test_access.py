@@ -1,33 +1,58 @@
 """Scenarios of the access delta spec. One test per scenario."""
 
+import httpx2
 import pytest
 
+from hakka_mcp.ledger import GroupBy
 
-def test_missing_api_key_rejected():
+ROUTE = {"client": "code", "task_type": "code-feature", "session_id": "s1", "rationale": "why"}
+
+
+def assert_unauthorized(url: str, key: str | None) -> None:
+    headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    initialize = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}
+    response = httpx2.post(url, json=initialize, headers=headers)
+    assert response.status_code == 401
+
+
+def test_missing_api_key_rejected(mcp_session, ledger):
     """Missing API key rejected."""
-    pytest.skip("not implemented")
+    assert_unauthorized(mcp_session(None).url, None)
+    assert ledger.stats(GroupBy.TOTAL).total.calls == 0
 
 
-def test_revoked_key_rejected():
+def test_revoked_key_rejected(mcp_session, ledger):
     """Revoked key rejected."""
-    pytest.skip("not implemented")
+    key = ledger.issue_key("alice", admin=False)
+    ledger.revoke_key("alice")
+    assert_unauthorized(mcp_session(None).url, key)
 
 
-def test_user_id_comes_from_the_key():
+def test_user_id_comes_from_the_key(mcp_session, ledger):
     """User id comes from the key."""
-    pytest.skip("not implemented")
+    mcp_session("alice").call("route", **ROUTE, user_id="mallory")
+    keys = {k.user_id for k in ledger.list_keys()}
+    assert keys == {"alice"}
+    rows = ledger.stats(GroupBy.TOTAL).total
+    assert rows.users == 1
+    assert "mallory" not in repr(ledger.stats(GroupBy.CONFIG))
 
 
-def test_non_admin_asks_for_statistics():
+def test_non_admin_asks_for_statistics(mcp_session):
     """Non-admin asks for statistics."""
-    pytest.skip("not implemented")
+    result = mcp_session("alice").call("get_usage_stats")
+    assert result.is_error
+    assert "forbidden" in result.content[0].text
 
 
 def test_issue_a_key():
     """Issue a key."""
-    pytest.skip("not implemented")
+    pytest.skip("lands with the CLI unit")
 
 
 def test_stored_key_is_not_readable():
     """Stored key is not readable."""
-    pytest.skip("not implemented")
+    pytest.skip("lands with the CLI unit")
